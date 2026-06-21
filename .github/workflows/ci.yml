@@ -223,6 +223,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dl
+          # 只取本 job 需要的指标 artifact，排除 build-push/sbom 自动产生的 *.dockerbuild、*.cyclonedx.json 噪音
+          pattern: "{metrics-*,artifacts-*}"
       - name: 组装并发布 PR 评论
         uses: actions/github-script@v7
         with:
