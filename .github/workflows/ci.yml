@@ -118,6 +118,8 @@ jobs:
         language: [python, javascript]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # gitleaks 需完整历史才能扫提交范围（浅克隆会令 parent^ 解析失败）
       - uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
