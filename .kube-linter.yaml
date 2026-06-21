@@ -1,0 +1,9 @@
+checks:
+  # 默认检查全开，仅排除两条对单节点 PoC 不现实的：
+  exclude:
+    - minimum-three-replicas   # dev 环境刻意只跑 1 副本
+    - no-anti-affinity         # minikube 单节点无法满足反亲和
+  # 额外打开「非 root + 只读根文件系统」两条硬性安全检查
+  include:
+    - run-as-non-root
+    - no-read-only-root-fs

@@ -1,0 +1,40 @@
+# 加分项（+3）：ArgoCD GitOps。
+# 用一个 ApplicationSet 为 reservation/member 两个服务各生成一个 Application，
+# 让 prod 的期望状态完全由本仓库 infra/helm 驱动（Git 即唯一事实来源）。
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: nekocafe-prod
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - service: reservation
+          - service: member
+  template:
+    metadata:
+      name: "nekocafe-{{service}}-prod"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/uuu11111/nekocafe.git
+        targetRevision: main
+        path: infra/helm
+        helm:
+          valueFiles:
+            - values-prod.yaml
+          parameters:
+            - name: image.repository
+              value: "ghcr.io/uuu11111/nekocafe-{{service}}"
+            - name: ingress.path
+              value: "/{{service}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: nekocafe-prod
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

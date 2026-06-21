@@ -1,0 +1,48 @@
+# OTel Collector 只负责一件事：收两个服务发来的 OTLP trace，做尾采样后转给 Tempo。
+# 指标走 Prometheus 直接 scrape /metrics；日志走 Promtail 采集 stdout。各司其职，配置最简。
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+  # 尾采样：错误链路和慢链路 100% 留，其余按 20% 概率采，兼顾问题定位与存储成本
+  tail_sampling:
+    decision_wait: 5s
+    policies:
+      - name: keep-errors
+        type: status_code
+        status_code: { status_codes: [ERROR] }
+      - name: keep-slow
+        type: latency
+        latency: { threshold_ms: 500 }
+      - name: sample-rest
+        type: probabilistic
+        probabilistic: { sampling_percentage: 20 }
+  batch:
+    timeout: 2s
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, tail_sampling, batch]
+      exporters: [otlp/tempo]

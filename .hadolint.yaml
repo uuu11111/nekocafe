@@ -1,0 +1,5 @@
+# 低于 warning 才算通过；信任官方与 GHCR 仓库
+failure-threshold: warning
+trustedRegistries:
+  - docker.io
+  - ghcr.io

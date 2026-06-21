@@ -1,0 +1,40 @@
+# prod：4 副本起步、HPA 上限拉高、PDB 保 3 个、采样率 10%，资源配额更足
+env: prod
+replicaCount: 4
+
+image:
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+config:
+  logLevel: INFO
+  otlpEndpoint: http://otel-collector.observability.svc:4318
+  traceSampleRatio: "0.1"     # 生产 10% 头采样；错误/慢链路由 Collector 尾采样兜底
+
+ingress:
+  host: nekocafe.example.com
+
+hpa:
+  enabled: true
+  minReplicas: 4
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 65
+
+pdb:
+  enabled: true
+  minAvailable: 3
+
+serviceMonitor:
+  enabled: true
+
+# 默认无金丝雀；发布时由 CD 流水线注入 canary.weight=5/25/50/100
+canary:
+  weight: 0
+  replicaCount: 1

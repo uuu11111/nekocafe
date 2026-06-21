@@ -1,0 +1,6 @@
+# 默认所有改动都需要我 review（单人 PoC，正式团队应替换为各模块 owner）
+*                       @uuu11111
+/services/reservation/  @uuu11111
+/services/member/       @uuu11111
+/infra/                 @uuu11111
+/.github/               @uuu11111

@@ -1,0 +1,174 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 要部署的镜像 tag（默认用本次 commit sha）
+        required: false
+
+permissions:
+  contents: read
+
+# 部署串行、且不允许中途取消，避免把环境留在半部署状态
+concurrency:
+  group: cd-main
+  cancel-in-progress: false
+
+env:
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/nekocafe
+  TAG: ${{ github.event.inputs.image_tag || github.sha }}
+
+jobs:
+  # ================= 推送镜像到 GHCR =================
+  push-images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service: [reservation, member]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}
+          tags: |
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+      - uses: docker/build-push-action@v6
+        with:
+          context: services/${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  # ================= 自动部署 dev =================
+  deploy-dev:
+    needs: push-images
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.3
+      - name: 写入 kubeconfig（来自 Secret，绝不入库）
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG_DEV }}" | base64 -d > ~/.kube/config
+      - name: helm 部署两个服务到 nekocafe-dev
+        run: |
+          SHORT=$(echo "$TAG" | cut -c1-7)
+          for SVC in reservation member; do
+            helm upgrade --install "$SVC" infra/helm \
+              -n nekocafe-dev --create-namespace \
+              -f infra/helm/values-dev.yaml \
+              --set image.repository=${IMAGE_PREFIX}-$SVC \
+              --set image.tag=sha-${SHORT} \
+              --set ingress.pathPrefix=/$SVC \
+              --wait --timeout 5m
+          done
+      - name: 冒烟
+        run: bash scripts/smoke.sh https://dev.nekocafe.example.com
+
+  # ================= 自动部署 staging =================
+  deploy-staging:
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.3
+      - run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > ~/.kube/config
+      - name: helm 部署两个服务到 nekocafe-staging
+        run: |
+          SHORT=$(echo "$TAG" | cut -c1-7)
+          for SVC in reservation member; do
+            helm upgrade --install "$SVC" infra/helm \
+              -n nekocafe-staging --create-namespace \
+              -f infra/helm/values-staging.yaml \
+              --set image.repository=${IMAGE_PREFIX}-$SVC \
+              --set image.tag=sha-${SHORT} \
+              --set ingress.pathPrefix=/$SVC \
+              --wait --timeout 5m
+          done
+      - name: 冒烟 + 端到端
+        run: bash scripts/smoke.sh https://staging.nekocafe.example.com
+
+  # ============ 部署 prod（需人工审批）+ 金丝雀 + 自动回滚 ============
+  deploy-prod:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    # 在仓库 Settings → Environments → prod 配 required reviewers，
+    # 这里就会卡一个人工审批节点（满足「合并到 main 后灰度需审批」）
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.3
+      - run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG_PROD }}" | base64 -d > ~/.kube/config
+      - name: 渐进式金丝雀（5→25→50→100，每档分析，越线即回滚）
+        env:
+          PROM_URL: ${{ secrets.PROM_URL }}
+          NEW_TAG: sha-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+          for W in 5 25 50 100; do
+            echo "::group::金丝雀放量 ${W}%"
+            for SVC in reservation member; do
+              helm upgrade --install "$SVC" infra/helm \
+                -n nekocafe-prod --create-namespace \
+                -f infra/helm/values-prod.yaml \
+                --set image.repository=${IMAGE_PREFIX}-$SVC \
+                --set ingress.pathPrefix=/$SVC \
+                --set canary.weight=${W} \
+                --set canary.image.tag=sha-${SHORT} \
+                --wait --timeout 5m
+            done
+            # 观察 2 分钟，看金丝雀 Pod 的 P95/错误率是否越线
+            if ! bash scripts/canary-analysis.sh "${PROM_URL}"; then
+              echo "::error::金丝雀指标越线，触发自动回滚（把流量收回稳定版）"
+              for SVC in reservation member; do
+                helm upgrade --install "$SVC" infra/helm \
+                  -n nekocafe-prod -f infra/helm/values-prod.yaml \
+                  --set image.repository=${IMAGE_PREFIX}-$SVC \
+                  --set ingress.pathPrefix=/$SVC \
+                  --set canary.weight=0 --wait --timeout 5m
+              done
+              exit 1
+            fi
+            echo "::endgroup::"
+          done
+      - name: 金丝雀通过 → 提升为稳定版并下线金丝雀
+        run: |
+          SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+          for SVC in reservation member; do
+            helm upgrade --install "$SVC" infra/helm \
+              -n nekocafe-prod -f infra/helm/values-prod.yaml \
+              --set image.repository=${IMAGE_PREFIX}-$SVC \
+              --set image.tag=sha-${SHORT} \
+              --set ingress.pathPrefix=/$SVC \
+              --set canary.weight=0 \
+              --wait --timeout 5m
+          done

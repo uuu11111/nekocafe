@@ -1,0 +1,7 @@
+node_modules
+test
+.eslintcache
+npm-debug.log*
+README*.md
+eslint.config.js
+coverage

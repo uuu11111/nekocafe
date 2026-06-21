@@ -1,0 +1,46 @@
+# 基础栈：预约 + 会员 + Redis。刻意保持精简，让 `make up` 几十秒就能起好，
+# 满足「他人 clone 后 30 分钟内可运行」。可观测性后端较重，单独放在
+# docker-compose.observability.yml，按需 `make up-obs` 叠加。
+name: nekocafe
+
+services:
+  reservation:
+    build: ./services/reservation
+    image: ghcr.io/uuu11111/nekocafe-reservation:0.1.0
+    environment:
+      APP_ENV: dev
+      APP_VERSION: "0.1.0"
+      MEMBER_SERVICE_URL: http://member:8080
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: INFO
+    ports:
+      - "8081:8080"
+    depends_on:
+      member:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  member:
+    build: ./services/member
+    image: ghcr.io/uuu11111/nekocafe-member:0.1.0
+    environment:
+      APP_ENV: dev
+      APP_VERSION: "0.1.0"
+      LOG_LEVEL: info
+    ports:
+      - "8082:8080"
+    init: true
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # PoC 不需要持久化，关掉 RDB/AOF，省内存也省启动时间
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped

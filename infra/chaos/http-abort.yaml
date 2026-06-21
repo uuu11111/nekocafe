@@ -1,0 +1,20 @@
+# 加分项（+5）：给会员服务注入 5xx，专门用来演示「金丝雀越线 → 自动回滚」
+# 以及「错误率告警 → traceId 定位」。演示视频 3:30-4:30 段使用本实验。
+apiVersion: chaos-mesh.org/v1alpha1
+kind: HTTPChaos
+metadata:
+  name: member-http-abort
+  namespace: nekocafe-staging
+spec:
+  mode: all
+  selector:
+    namespaces:
+      - nekocafe-staging
+    labelSelectors:
+      app: member
+  target: Response
+  port: 8080
+  abort: true                # 直接断连，制造 5xx
+  patterns:
+    - "/api/v1/members/*"
+  duration: "2m"

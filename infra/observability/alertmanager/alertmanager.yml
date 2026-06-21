@@ -1,0 +1,27 @@
+route:
+  receiver: dingtalk
+  group_by: ["alertname", "service"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # critical 单独走一条，便于后续接电话/短信升级
+    - matchers:
+        - severity="critical"
+      receiver: dingtalk
+      group_wait: 10s
+
+receivers:
+  - name: dingtalk
+    webhook_configs:
+      # 钉钉机器人需要经 prometheus-webhook-dingtalk 代理转发。
+      # 代理地址写在这里，真正的加签密钥/access_token 放在代理侧的 Secret 里，
+      # 绝不出现在本仓库（见 D3-1 §8 安全基线）。
+      - url: "http://dingtalk-proxy:8060/dingtalk/nekocafe/send"
+        send_resolved: true
+
+inhibit_rules:
+  # 同一服务已经 critical 告警时，抑制它的 warning，避免告警风暴
+  - source_matchers: [severity="critical"]
+    target_matchers: [severity="warning"]
+    equal: ["service"]

@@ -1,0 +1,37 @@
+groups:
+  - name: nekocafe-red
+    rules:
+      # ① 错误率：5xx 占比超 1% 持续 5 分钟 —— 对应运维总监「出问题要能感知」
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+            /
+          sum(rate(http_requests_total[5m])) by (service) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }} 5xx 错误率超过 1%"
+          description: "近 5 分钟 {{ $labels.service }} 错误率 {{ $value | humanizePercentage }}，已突破 SLO。"
+
+      # ② 延迟：P95 超 500ms 持续 5 分钟
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} P95 延迟超过 500ms"
+          description: "{{ $labels.service }} 近 5 分钟 P95 = {{ $value }}s。"
+
+      # ③ 实例下线：抓取失败超 1 分钟（崩溃 / OOM / 网络）
+      - alert: TargetDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} 实例不可达"
+          description: "Prometheus 已连续 1 分钟无法抓取 {{ $labels.job }}。"

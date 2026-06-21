@@ -1,0 +1,17 @@
+# 加分项（+5）：Chaos Mesh 故障演练 —— 随机杀预约服务的一个 Pod，
+# 验证「副本自愈 + 流量无感 + 告警/链路可观测」。
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: reservation-pod-kill
+  namespace: nekocafe-staging
+spec:
+  action: pod-kill
+  mode: one                  # 每次只杀一个，模拟单节点故障
+  selector:
+    namespaces:
+      - nekocafe-staging
+    labelSelectors:
+      app: reservation
+  scheduler:
+    cron: "@every 10m"

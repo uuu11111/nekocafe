@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "nekocafe.labels" . | nindent 4 }}
+    track: stable
+spec:
+  {{- if not .Values.hpa.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "nekocafe.selectorLabels" . | nindent 6 }}
+      track: stable
+  template:
+    metadata:
+      labels:
+        {{- include "nekocafe.selectorLabels" . | nindent 8 }}
+        track: stable
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8080"
+    spec:
+      {{- include "nekocafe.podSpec" (dict "root" . "tag" (.Values.image.tag | default .Chart.AppVersion)) | nindent 6 }}
+{{- if gt (int .Values.canary.weight) 0 }}
+---
+# 金丝雀 Deployment：当 canary.weight > 0 时出现，跑新版本镜像，由 Ingress 按权重分流
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-canary
+  labels:
+    {{- include "nekocafe.labels" . | nindent 4 }}
+    track: canary
+spec:
+  replicas: {{ .Values.canary.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "nekocafe.selectorLabels" . | nindent 6 }}
+      track: canary
+  template:
+    metadata:
+      labels:
+        {{- include "nekocafe.selectorLabels" . | nindent 8 }}
+        track: canary
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8080"
+    spec:
+      {{- include "nekocafe.podSpec" (dict "root" . "tag" (.Values.canary.image.tag | default .Values.image.tag | default .Chart.AppVersion)) | nindent 6 }}
+{{- end }}

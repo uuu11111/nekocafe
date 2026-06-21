@@ -1,0 +1,26 @@
+# 仅用于工具配置（ruff / pytest / coverage）；依赖锁定在 requirements*.txt
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# 选取一组「信噪比高」的规则：语法错误(F)、风格(E)、import 排序(I)、
+# 易错模式(B)、过时写法(UP)、裸 except(BLE)。不强制全量类型注解(ANN)——
+# 对 FastAPI/Starlette 的回调参数(call_next 等)注解收益低、噪音大。
+select = ["E", "F", "I", "B", "UP", "BLE"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["src/telemetry.py"]  # 链路追踪初始化需真实 otel 后端，单测不覆盖，靠集成测试验证
+
+[tool.coverage.report]
+show_missing = true
+# CI 里设了门槛：低于 80% 直接挂（见 ci.yml 的 --cov-fail-under）

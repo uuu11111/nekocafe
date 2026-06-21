@@ -1,0 +1,9 @@
+apiVersion: v2
+name: nekocafe
+version: 0.1.0
+appVersion: "0.1.0"
+description: NekoCafé 通用服务 Helm Chart（按服务部署为多个 release：reservation / member）
+type: application
+maintainers:
+  - name: 刘璐
+    email: xdykj@outlook.com

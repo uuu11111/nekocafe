@@ -1,0 +1,18 @@
+{{- if .Values.serviceMonitor.enabled }}
+# 需集群已装 Prometheus Operator（kube-prometheus-stack）。让 Prometheus 自动发现并抓 /metrics。
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "nekocafe.labels" . | nindent 4 }}
+    release: {{ .Values.serviceMonitor.releaseLabel }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "nekocafe.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+{{- end }}

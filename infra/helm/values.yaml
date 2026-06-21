@@ -1,0 +1,65 @@
+# 默认值（被各环境 values-*.yaml 覆盖）。部署时按服务用 --set image.repository / ingress.pathPrefix 区分。
+env: dev
+
+image:
+  repository: ghcr.io/uuu11111/nekocafe-reservation
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+config:
+  logLevel: INFO
+  otlpEndpoint: http://otel-collector.observability.svc:4318
+  traceSampleRatio: "1.0"
+  memberServiceUrl: ""
+  redisUrl: ""
+
+ingress:
+  enabled: true
+  className: nginx
+  host: nekocafe.example.com
+  pathPrefix: ""          # 部署时按服务设为 /reservation、/member
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+
+hpa:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: false
+  minAvailable: 1
+
+# 密钥：默认不创建，引用集群侧已存在的 Secret（见 templates/secret.yaml 说明）
+existingSecret: ""
+secret:
+  create: false
+  data: {}
+
+serviceMonitor:
+  enabled: false
+  releaseLabel: kube-prometheus-stack
+  interval: 15s
+
+# 金丝雀：weight=0 即关闭；置为 5 即灰度 5%（一行配置）
+canary:
+  weight: 0
+  replicaCount: 1
+  image:
+    tag: ""

@@ -1,0 +1,13 @@
+# 运行时依赖锁（生产镜像只装这些）。版本全部锁死，保证可复现构建。
+fastapi==0.138.0
+uvicorn[standard]==0.40.0
+httpx==0.28.1
+pydantic==2.11.7
+prometheus-client==0.21.1
+redis==5.2.1
+opentelemetry-sdk==1.30.0
+# 用 OTLP/HTTP 导出器而非 grpc：少掉 grpcio 这个又大又含原生扩展的依赖，镜像更小、扫描面更窄
+opentelemetry-exporter-otlp-proto-http==1.30.0
+opentelemetry-instrumentation-fastapi==0.51b0
+opentelemetry-instrumentation-httpx==0.51b0
+opentelemetry-instrumentation-logging==0.51b0

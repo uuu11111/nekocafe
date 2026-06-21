@@ -1,0 +1,18 @@
+# dev：单副本、全量采样、不开 HPA/PDB，方便随时观察与排错
+env: dev
+replicaCount: 1
+
+config:
+  logLevel: DEBUG
+  otlpEndpoint: http://otel-collector.observability.svc:4318
+  traceSampleRatio: "1.0"     # dev 全采样，便于排查
+
+ingress:
+  host: dev.nekocafe.example.com
+
+hpa:
+  enabled: false
+pdb:
+  enabled: false
+serviceMonitor:
+  enabled: true
