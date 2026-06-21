@@ -7,6 +7,8 @@ metadata:
     {{- include "nekocafe.labels" . | nindent 4 }}
 spec:
   minAvailable: {{ .Values.pdb.minAvailable }}
+  # 节点维护驱逐时，即使 Pod 未就绪也允许驱逐，避免卡在 PDB 上（kube-linter 要求显式声明）
+  unhealthyPodEvictionPolicy: AlwaysAllow
   selector:
     matchLabels:
       {{- include "nekocafe.selectorLabels" . | nindent 6 }}
