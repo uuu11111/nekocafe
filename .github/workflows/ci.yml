@@ -157,7 +157,7 @@ jobs:
           echo "service=${{ matrix.service }}" >  metrics/${{ matrix.service }}-img.txt
           echo "image_size=${SIZE}"            >> metrics/${{ matrix.service }}-img.txt
       - name: Trivy 扫描（HIGH/CRITICAL 即中断）
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.33.1
         with:
           image-ref: ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ github.sha }}
           format: sarif
