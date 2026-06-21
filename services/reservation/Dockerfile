@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # ============ build 阶段：把依赖装进独立 venv，编译/缓存产物留在这一层 ============
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /app
@@ -13,7 +13,7 @@ RUN python -m venv /opt/venv \
  && find /opt/venv -name "*.pyc" -delete
 
 # ============ runtime 阶段：只拷 venv + 源码，非 root 运行，体积最小 ============
-FROM python:3.12-slim
+FROM python:3.14-slim
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
