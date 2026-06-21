@@ -156,15 +156,19 @@ jobs:
                  --format '{{.Size}}' | awk '{printf "%.0f MB", $1/1024/1024}')
           echo "service=${{ matrix.service }}" >  metrics/${{ matrix.service }}-img.txt
           echo "image_size=${SIZE}"            >> metrics/${{ matrix.service }}-img.txt
+      - name: 安装 Trivy（Aqua 官方 APT 源，绕开 setup-trivy 安装链）
+        run: |
+          sudo apt-get install -y wget gnupg
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | sudo tee /etc/apt/sources.list.d/trivy.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y trivy
+          trivy --version
       - name: Trivy 扫描（HIGH/CRITICAL 即中断）
-        uses: aquasecurity/trivy-action@v0.33.1
-        with:
-          image-ref: ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ github.sha }}
-          format: sarif
-          output: trivy-${{ matrix.service }}.sarif
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          ignore-unfixed: true
+        run: |
+          trivy image --format sarif --output trivy-${{ matrix.service }}.sarif \
+            --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed \
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ github.sha }}
       - name: 上传扫描结果到 Security 面板
         if: always()
         uses: github/codeql-action/upload-sarif@v3
